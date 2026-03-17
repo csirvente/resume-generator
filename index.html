@@ -1062,7 +1062,11 @@ function buildUserPrompt(data) {
     if (data.title) p += `Target job title: ${data.title}\n`;
     if (data.email) p += `Email: ${data.email}\n`;
     if (data.job) p += `\n## Target job description\n${data.job}\n`;
-    if (window._lang === 'fr') p += `\nIMPORTANT: Write all resume text in French. Names, cities, brand names and technical terms may stay in their original form.\n`;
+    if (window._lang === 'fr') {
+      p += `\nIMPORTANT: Write ALL resume text in French, regardless of the language of the source material. Names, cities, brand names and technical terms may stay in their original form.\n`;
+    } else {
+      p += `\nIMPORTANT: Write ALL resume text in English, regardless of the language of the source material. Names, cities, brand names and technical terms may stay in their original form.\n`;
+    }
     return p;
   }
 
@@ -1112,7 +1116,11 @@ function buildUserPrompt(data) {
   }
 
   if (data.job) p += `## Target job description\n${data.job}\n`;
-  if (window._lang === 'fr') p += `\nIMPORTANT: Write all resume text in French. Names, cities, brand names and technical terms may stay in their original form.\n`;
+  if (window._lang === 'fr') {
+    p += `\nIMPORTANT: Write ALL resume text in French, regardless of the language of the source material. Names, cities, brand names and technical terms may stay in their original form.\n`;
+  } else {
+    p += `\nIMPORTANT: Write ALL resume text in English, regardless of the language of the source material. Names, cities, brand names and technical terms may stay in their original form.\n`;
+  }
   return p;
 }
 
