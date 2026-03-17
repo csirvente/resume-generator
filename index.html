@@ -299,6 +299,22 @@
       cursor: pointer; padding: 2px 4px; flex-shrink: 0; display: none;
     }
 
+    /* ─── Language toggle ───────────────────────────────────────── */
+    .lang-toggle {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+      font-size: 12px; font-weight: 600; color: var(--gray);
+    }
+    .lang-toggle-btn {
+      display: flex; border: 1px solid var(--bdr); border-radius: 6px; overflow: hidden;
+    }
+    .lang-btn {
+      padding: 4px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+      border: none; background: var(--white); color: var(--gray);
+      font-family: 'Inter', sans-serif; transition: background .15s, color .15s;
+    }
+    .lang-btn.active { background: var(--dk); color: var(--white); }
+    .lang-btn:not(.active):hover { background: var(--lk); color: var(--dk); }
+
     /* ─── Resume header with optional photo ─────────────────────── */
     .rv-header-row { display: flex; align-items: flex-start; gap: 16px; }
     .rv-header-text { flex: 1; min-width: 0; }
@@ -619,6 +635,14 @@
         <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a>
         (takes 30 seconds, no credit card needed).<br><br>
         <strong>Note:</strong> Keys are never stored or logged — they only live in memory during your session.
+      </div>
+    </div>
+
+    <div class="lang-toggle">
+      🌐 Language
+      <div class="lang-toggle-btn">
+        <button class="lang-btn active" id="lang-en" onclick="setLang('en')">EN</button>
+        <button class="lang-btn" id="lang-fr" onclick="setLang('fr')">FR</button>
       </div>
     </div>
 
@@ -1038,6 +1062,7 @@ function buildUserPrompt(data) {
     if (data.title) p += `Target job title: ${data.title}\n`;
     if (data.email) p += `Email: ${data.email}\n`;
     if (data.job) p += `\n## Target job description\n${data.job}\n`;
+    if (window._lang === 'fr') p += `\nIMPORTANT: Write all resume text in French. Names, cities, brand names and technical terms may stay in their original form.\n`;
     return p;
   }
 
@@ -1087,12 +1112,22 @@ function buildUserPrompt(data) {
   }
 
   if (data.job) p += `## Target job description\n${data.job}\n`;
+  if (window._lang === 'fr') p += `\nIMPORTANT: Write all resume text in French. Names, cities, brand names and technical terms may stay in their original form.\n`;
   return p;
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let lastJSON = null;
 let loadingTimer = null;
+
+// ─── Language ─────────────────────────────────────────────────────────────────
+window._lang = 'en';
+function L(en, fr) { return window._lang === 'fr' ? fr : en; }
+function setLang(lang) {
+  window._lang = lang;
+  document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+  document.getElementById('lang-fr').classList.toggle('active', lang === 'fr');
+}
 
 // ─── Generate ────────────────────────────────────────────────────────────────
 async function generate() {
@@ -1272,14 +1307,14 @@ function renderResume(data) {
     </div>
 
     ${s ? `<div class="rv-section">
-      <div class="rv-section-title">PROFESSIONAL SUMMARY</div>
+      <div class="rv-section-title">${L('PROFESSIONAL SUMMARY', 'PROFIL')}</div>
       <div class="rv-summary">${esc(s)}</div>
     </div>` : ''}
 
     ${(domainsHTML || feHTML) ? `<div class="rv-section">
-      <div class="rv-section-title">AREAS OF EXPERTISE</div>
-      ${domainsHTML ? `<div class="rv-sublabel">Core Domains</div>${domainsHTML}` : ''}
-      ${feHTML ? `<div class="rv-sublabel">Functional Expertise</div>${feHTML}` : ''}
+      <div class="rv-section-title">${L('AREAS OF EXPERTISE', 'DOMAINES D\'EXPERTISE')}</div>
+      ${domainsHTML ? `<div class="rv-sublabel">${L('Core Domains', 'Cœurs de métier')}</div>${domainsHTML}` : ''}
+      ${feHTML ? `<div class="rv-sublabel">${L('Functional Expertise', 'Expertises fonctionnelles')}</div>${feHTML}` : ''}
     </div>` : ''}
 
     ${techHTML ? `<div class="rv-section">
@@ -1288,12 +1323,12 @@ function renderResume(data) {
     </div>` : ''}
 
     ${eduHTML ? `<div class="rv-section">
-      <div class="rv-section-title">EDUCATION</div>
+      <div class="rv-section-title">${L('EDUCATION', 'FORMATION')}</div>
       ${eduHTML}
     </div>` : ''}
 
     ${workHTML ? `<div class="rv-section">
-      <div class="rv-section-title">WORK EXPERIENCE</div>
+      <div class="rv-section-title">${L('WORK EXPERIENCE', 'EXPÉRIENCES')}</div>
       ${workHTML}
     </div>` : ''}
   `;
@@ -1346,8 +1381,11 @@ async function downloadWord() {
   const data = lastJSON;
 
   const {
-    Document, Packer, Paragraph, TextRun,
+    Document, Packer, Paragraph, TextRun, ImageRun,
     ShadingType, TabStopType, UnderlineType,
+    HorizontalPositionRelativeFrom, HorizontalPositionAlign,
+    VerticalPositionRelativeFrom, VerticalPositionAlign,
+    TextWrappingType, TextWrappingSide,
     convertMillimetersToTwip,
   } = docx;
 
@@ -1396,6 +1434,15 @@ async function downloadWord() {
     });
   }
 
+  // ── Photo helper (base64 data URL → Uint8Array) ───────────────────────────
+  function dataUrlToUint8Array(dataUrl) {
+    const base64 = dataUrl.split(',')[1];
+    const binary = atob(base64);
+    const bytes  = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
   // ── Build document children ────────────────────────────────────────────────
   const children = [];
   const h   = data.header || {};
@@ -1408,11 +1455,31 @@ async function downloadWord() {
   const tech = Array.isArray(data.technologies) ? data.technologies : [];
 
   // Name  (first normal-weight · last bold uppercase — both dark blue, 18 pt)
+  // If a photo is uploaded, embed it as a floating anchor top-right
+  const nameRuns = [
+    run(`${h.first_name || ''} `, { size: 36, color: DK }),
+    run((h.last_name || '').toUpperCase(), { size: 36, color: DK, bold: true }),
+  ];
+  if (window._photoDataUrl) {
+    nameRuns.push(new ImageRun({
+      data: dataUrlToUint8Array(window._photoDataUrl),
+      transformation: { width: 90, height: 90 },
+      floating: {
+        horizontalPosition: {
+          relative: HorizontalPositionRelativeFrom.MARGIN,
+          align: HorizontalPositionAlign.RIGHT,
+        },
+        verticalPosition: {
+          relative: VerticalPositionRelativeFrom.MARGIN,
+          align: VerticalPositionAlign.TOP,
+        },
+        wrap: { type: TextWrappingType.SQUARE, side: TextWrappingSide.BOTH_SIDES },
+        margins: { top: 0, bottom: 114300, left: 114300, right: 0 },
+      },
+    }));
+  }
   children.push(new Paragraph({
-    children: [
-      run(`${h.first_name || ''} `, { size: 36, color: DK }),
-      run((h.last_name || '').toUpperCase(), { size: 36, color: DK, bold: true }),
-    ],
+    children: nameRuns,
     spacing: { before: 0, after: 60 },
   }));
 
@@ -1443,7 +1510,7 @@ async function downloadWord() {
 
   // ── Professional Summary ───────────────────────────────────────────────────
   if (s) {
-    children.push(sectionTitle('PROFESSIONAL SUMMARY'));
+    children.push(sectionTitle(L('PROFESSIONAL SUMMARY', 'PROFIL')));
     children.push(new Paragraph({
       children: [run(s)],
       spacing: { before: 0, after: 80 },
@@ -1454,7 +1521,7 @@ async function downloadWord() {
   const domains = exp.core_domains || [];
   const fe      = exp.functional_expertise || [];
   if (domains.length || fe.length) {
-    children.push(sectionTitle('AREAS OF EXPERTISE'));
+    children.push(sectionTitle(L('AREAS OF EXPERTISE', "DOMAINES D'EXPERTISE")));
     domains.forEach((d, i) => {
       children.push(new Paragraph({
         children: [run(d.domain_title, { bold: true, color: DK })],
@@ -1464,7 +1531,7 @@ async function downloadWord() {
     });
     if (fe.length) {
       if (domains.length) children.push(new Paragraph({
-        children: [run('Functional Expertise', { bold: true, color: DK, size: 19 })],
+        children: [run(L('Functional Expertise', 'Expertises fonctionnelles'), { bold: true, color: DK, size: 19 })],
         spacing: { before: 100, after: 30 },
       }));
       fe.forEach(b => children.push(bullet(b)));
@@ -1473,7 +1540,7 @@ async function downloadWord() {
 
   // ── Technologies — chip paragraph (1.5 line spacing) ──────────────────────
   if (tech.length) {
-    children.push(sectionTitle('TECHNOLOGIES'));
+    children.push(sectionTitle('TECHNOLOGIES')); // same in both languages
     const techRuns = [];
     tech.forEach((t, i) => { if (i) techRuns.push(spacer()); techRuns.push(chip(t)); });
     children.push(new Paragraph({
@@ -1484,7 +1551,7 @@ async function downloadWord() {
 
   // ── Education ──────────────────────────────────────────────────────────────
   if (edu.length) {
-    children.push(sectionTitle('EDUCATION'));
+    children.push(sectionTitle(L('EDUCATION', 'FORMATION')));
     edu.forEach((e, i) => {
       const runs = [run(e.degree, { bold: true })];
       if (e.institution) runs.push(run(`  —  ${e.institution}`, { bold: true, color: DK }));
@@ -1503,7 +1570,7 @@ async function downloadWord() {
 
   // ── Work Experience ────────────────────────────────────────────────────────
   if (wrk.length) {
-    children.push(sectionTitle('WORK EXPERIENCE'));
+    children.push(sectionTitle(L('WORK EXPERIENCE', 'EXPÉRIENCES')));
     wrk.forEach((w, i) => {
       const dateStr = `${w.start_date || ''} – ${w.end_date || ''}`;
       // Title | Company [tab] Date  — right-aligned via tab stop
