@@ -9,6 +9,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <!-- DOCX text extraction -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <!-- DOCX export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js"></script>
   <style>
     /* ─── Design tokens ──────────────────────────────────────────── */
     :root {
@@ -342,7 +345,7 @@
     @media print {
       @page { size: A4; margin: 10mm 10mm; }
       body { background: white; }
-      .app-header, .input-panel, .output-actions, .key-badge { display: none !important; }
+      .app-header, .input-panel, .output-actions, .key-badge, .template-banner { display: none !important; }
       .app-main { display: block; padding: 0; }
       .output-panel { width: 100%; }
       .resume-paper { box-shadow: none; border: none; max-width: none; padding: 0; border-radius: 0; }
@@ -629,6 +632,7 @@
   <div class="output-panel">
     <div id="output-actions" class="output-actions" style="display:none">
       <button class="action-btn primary" onclick="window.print()">🖨️ Save as PDF</button>
+      <button class="action-btn" onclick="downloadWord()">📄 Download Word</button>
       <button class="action-btn" onclick="copyJSON()">📋 Copy JSON</button>
       <button class="action-btn" onclick="generate()">↻ Regenerate</button>
     </div>
@@ -1332,6 +1336,50 @@ function showResume(data) {
   document.getElementById('output-resume').style.display = 'block';
   document.getElementById('output-actions').style.display = 'flex';
   document.getElementById('generateBtn').disabled = false;
+}
+
+// ─── Download Word ────────────────────────────────────────────────────────────
+function downloadWord() {
+  if (!lastJSON) return;
+  const name = [lastJSON.first_name, lastJSON.last_name].filter(Boolean).join('_') || 'Resume';
+  const title = (lastJSON.job_title || 'Resume').replace(/[^a-zA-Z0-9_\- ]/g, '');
+  const filename = `Resume_${name}_${title}.docx`.replace(/ /g, '_');
+
+  // Inline styles for the Word document
+  const styles = `
+    body { font-family: 'Calibri', sans-serif; font-size: 10pt; color: #1a1a1a; margin: 0; padding: 0; }
+    .rv-header-row { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+    .rv-header-text { flex: 1; }
+    .rv-photo { width: 90px; height: 90px; border-radius: 8px; object-fit: cover; }
+    .rv-name { font-size: 18pt; font-weight: normal; color: #2A68A0; margin-bottom: 4px; }
+    .rv-name strong { font-weight: 800; text-transform: uppercase; }
+    .rv-job-title { font-size: 14pt; color: #1a1a1a; margin-bottom: 3px; }
+    .rv-subtitle { font-size: 10pt; color: #656565; margin-bottom: 10px; }
+    .rv-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .rv-chip { background: #C6D9F1; padding: 3px 10px; border-radius: 3px; font-size: 9.5pt; display: inline-block; margin: 2px; }
+    .rv-section { margin-bottom: 14px; }
+    .rv-section-title { font-size: 12pt; font-weight: 700; color: #1a1a1a; border-bottom: 2px solid #C6D9F1; padding-bottom: 3px; margin-bottom: 8px; padding-top: 4px; }
+    .rv-summary { font-size: 10pt; line-height: 1.55; }
+    .rv-domain { margin-bottom: 8px; }
+    .rv-domain-title { font-weight: 700; color: #2A68A0; margin-bottom: 2px; }
+    .rv-bullet { padding-left: 14px; position: relative; margin-bottom: 2px; font-size: 9.5pt; }
+    .rv-sublabel { font-weight: 700; color: #2A68A0; font-size: 9.5pt; margin: 6px 0 3px; }
+    .rv-tech-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+    .rv-entry { margin-bottom: 8px; }
+    .rv-entry-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
+    .rv-entry-title { font-weight: 700; color: #1a1a1a; }
+    .rv-entry-org { font-weight: 700; color: #2A68A0; }
+    .rv-entry-date { font-size: 9.5pt; color: #656565; }
+    .rv-entry-summary { font-style: italic; font-size: 9.5pt; margin: 2px 0 3px; }
+    .rv-tech-env { font-size: 9pt; margin-top: 3px; }
+    .rv-tech-env strong { color: #2A68A0; }
+  `;
+
+  const resumeHTML = document.getElementById('resume-paper').innerHTML;
+  const fullHTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${styles}</style></head><body>${resumeHTML}</body></html>`;
+
+  const blob = htmlDocx.asBlob(fullHTML, { orientation: 'portrait', margins: { top: 720, right: 720, bottom: 720, left: 720 } });
+  saveAs(blob, filename);
 }
 
 // ─── Copy JSON ───────────────────────────────────────────────────────────────
