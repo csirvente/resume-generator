@@ -386,7 +386,7 @@
     <strong>Template:</strong> This resume generator adopts a layout recommended by recruiters and ATS-friendly, allowing you to display both soft and hard skills effectively.
   </div>
   <a href="resume_template.docx" download class="template-dl-btn">
-    ⬇️ Download blank template
+    ⬇️ Download Word model
   </a>
 </div>
 
@@ -846,8 +846,8 @@ Use this exact schema:
     "targeted_job_title": "string"
   },
   "subtitle": {
-    "years_of_experience": "string or null",
-    "english_proficiency": "string or null"
+    "years_of_experience": "string or null — format: 'X years of experience', e.g. '7 years of experience'",
+    "english_proficiency": "string or null — format: 'English: level', e.g. 'English: fluent'"
   },
   "contact": {
     "phone": "string or null",
@@ -1442,13 +1442,41 @@ async function downloadWord() {
     });
   }
 
-  // ── Photo helper (base64 data URL → Uint8Array) ───────────────────────────
+  // ── Photo helpers ─────────────────────────────────────────────────────────
   function dataUrlToUint8Array(dataUrl) {
     const base64 = dataUrl.split(',')[1];
     const binary = atob(base64);
     const bytes  = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     return bytes;
+  }
+
+  // Crop to square, apply round corners, return new PNG data URL
+  function preparePhoto(dataUrl, sizePx = 300) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = sizePx; canvas.height = sizePx;
+        const ctx = canvas.getContext('2d');
+        // Round-corner clip (≈16% radius, matching the plugin)
+        const r = sizePx * 0.16;
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.lineTo(sizePx - r, 0); ctx.quadraticCurveTo(sizePx, 0, sizePx, r);
+        ctx.lineTo(sizePx, sizePx - r); ctx.quadraticCurveTo(sizePx, sizePx, sizePx - r, sizePx);
+        ctx.lineTo(r, sizePx); ctx.quadraticCurveTo(0, sizePx, 0, sizePx - r);
+        ctx.lineTo(0, r); ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.closePath(); ctx.clip();
+        // Centre-crop to square (no distortion)
+        const side = Math.min(img.naturalWidth, img.naturalHeight);
+        const sx = (img.naturalWidth  - side) / 2;
+        const sy = (img.naturalHeight - side) / 2;
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, sizePx, sizePx);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.src = dataUrl;
+    });
   }
 
   // ── Build document children ────────────────────────────────────────────────
@@ -1469,9 +1497,11 @@ async function downloadWord() {
     run((h.last_name || '').toUpperCase(), { size: 36, color: DK, bold: true }),
   ];
   if (window._photoDataUrl) {
+    // Square-crop + round corners via canvas, then embed as 2.5 cm floating image
+    const processedPhoto = await preparePhoto(window._photoDataUrl, 300);
     nameRuns.push(new ImageRun({
-      data: dataUrlToUint8Array(window._photoDataUrl),
-      transformation: { width: 90, height: 90 },
+      data: dataUrlToUint8Array(processedPhoto),
+      transformation: { width: 95, height: 95 }, // ≈ 2.5 cm at 96 dpi
       floating: {
         horizontalPosition: {
           relative: HorizontalPositionRelativeFrom.MARGIN,
