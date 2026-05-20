@@ -1209,7 +1209,13 @@ async function generate() {
     try {
       resumeData = JSON.parse(jsonStr);
     } catch (parseErr) {
-      throw new Error(`Could not parse resume JSON. The model may have returned invalid output.\n\nRaw output:\n${raw.slice(0, 400)}…`);
+      // The model may have truncated the JSON mid-stream (common with low-token-limit free models).
+      // Attempt to repair it by closing any open strings, arrays, and objects.
+      try {
+        resumeData = JSON.parse(repairJSON(jsonStr));
+      } catch (e) {
+        throw new Error(`Could not parse resume JSON. The model may have returned invalid output.\n\nRaw output:\n${raw.slice(0, 400)}…`);
+      }
     }
 
     lastJSON = resumeData;
@@ -1280,8 +1286,11 @@ function renderResume(data) {
   const workHTML = work.map(w => {
     const respHTML = (w.responsibilities || [])
       .map(r => `<div class="rv-bullet">${esc(r)}</div>`).join('');
-    const techEnvHTML = (w.tech_environment || []).length
-      ? `<div class="rv-tech-env"><strong>Tech: </strong>${esc((w.tech_environment).join(', '))}</div>`
+    const techEnv = Array.isArray(w.tech_environment)
+      ? w.tech_environment
+      : (w.tech_environment ? String(w.tech_environment).split(',').map(s => s.trim()).filter(Boolean) : []);
+    const techEnvHTML = techEnv.length
+      ? `<div class="rv-tech-env"><strong>Tech: </strong>${esc(techEnv.join(', '))}</div>`
       : '';
     return `<div class="rv-entry">
       <div class="rv-entry-head">
@@ -1340,6 +1349,42 @@ function renderResume(data) {
       ${workHTML}
     </div>` : ''}
   `;
+}
+
+// ─── JSON repair (handles truncated output from low-token models) ─────────────
+function repairJSON(str) {
+  let s = str.trim();
+
+  // Walk the string character by character to track open structures
+  const stack = [];
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (escape)          { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true;  continue; }
+    if (ch === '"')      { inString = !inString; continue; }
+    if (inString)        continue;
+    if      (ch === '{') stack.push('}');
+    else if (ch === '[') stack.push(']');
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+
+  // If we're mid-string, close it
+  if (inString) s += '"';
+
+  // Strip trailing incomplete key (e.g. ,"responsibilities": or ,"key")
+  s = s.replace(/,?\s*"[^"]*"\s*:\s*$/, '');
+  s = s.replace(/,?\s*"[^"]*"\s*$/, '');
+
+  // Strip trailing comma before closing
+  s = s.replace(/,\s*$/, '');
+
+  // Close all open structures in reverse order
+  while (stack.length) s += stack.pop();
+
+  return s;
 }
 
 // ─── HTML escape ─────────────────────────────────────────────────────────────
@@ -1632,10 +1677,13 @@ async function downloadWord() {
         indent: { left: 360, hanging: 180 },
         spacing: { before: 0, after: 30, line: 280, lineRule: 'auto' },
       })));
-      if ((w.tech_environment || []).length) children.push(new Paragraph({
+      const techEnvArr = Array.isArray(w.tech_environment)
+        ? w.tech_environment
+        : (w.tech_environment ? String(w.tech_environment).split(',').map(s => s.trim()).filter(Boolean) : []);
+      if (techEnvArr.length) children.push(new Paragraph({
         children: [
           run('Tech: ', { bold: true, color: DK, size: 18 }),
-          run(w.tech_environment.join(', '), { italic: true, color: GRAY, size: 18 }),
+          run(techEnvArr.join(', '), { italic: true, color: GRAY, size: 18 }),
         ],
         spacing: { before: 30, after: 30 },
       }));
