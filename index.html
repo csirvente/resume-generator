@@ -1179,7 +1179,7 @@ async function generate() {
         'X-Title': 'Resume Generator',
       },
       body: JSON.stringify({
-        model: 'meta-llama/llama-3.3-70b-instruct',
+        model: 'openrouter/free',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user',   content: userPrompt },
